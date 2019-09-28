@@ -1,0 +1,591 @@
+---
+title: "R6 Introduction"
+author: "Greg Snow"
+date: "September 26, 2019"
+output: 
+  revealjs::revealjs_presentation:
+    reveal_options:
+      slideNumber: false
+      controls: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+library(R6)
+library(fortunes)
+options(width=70)
+```
+
+## Law of Programming {data-background="IHR_Background.jpg"}
+
+\  
+
+Every program can be shortened by at least one line and has at least one bug.
+
+\  
+
+By induction, every program can be reduced to 1 line that does not work.
+
+# Functional vs. Object Oriented programming {data-background="IHR_Background.jpg"}
+
+## Functional Programming {data-background="IHR_Background.jpg"}
+
+* Function results based only on inputs.
+
+  - Same inputs imply same output, regardless of other variables/options.
+  
+* Functions only return results, do not change inputs.
+
+  - Inputs may be copied internally.
+  
+* Clean, simple, predictable.
+
+  - Sometimes redundant, inefficient, and a pain to pass everything around.
+  
+## Pass by Reference {data-background="IHR_Background.jpg"}
+
+* Instead of passing in data, pass the address in memory where the data is located
+
+* Function can access data without copying
+
+* Function can also change the data in place
+
+* Less redundant, more efficient, less of a pain in some ways
+
+  - Not clean, Not simple, Not predictable
+
+## Object Oriented Programming {data-background="IHR_Background.jpg"}
+
+* Data/Object focused, methods act on specific objects
+
+* Object can be modified by its methods
+
+* Can restrict changing object to methods to avoid some reference problems
+
+## {data-background="IHR_Background.jpg"}
+
+S/R is a mixture of all these (possibly plus others).
+
+```{r fortune1}
+fortune(322)
+```
+
+## Why use objects? {data-background="IHR_Background.jpg"}
+
+* Keep related variables together.
+
+* Keep information between function calls.
+
+* Avoid global variables and options.
+
+* All the cool kids are doing it.
+
+# Global variables {data-background="IHR_Background.jpg"}
+
+## Quick Quiz {data-background="IHR_Background.jpg"}
+
+```{r qq, eval=FALSE}
+x <- 10
+y <- FunctionThatUsesGlobalVariables(x)
+```
+
+What is the value of `x`?
+
+## {data-background="IHR_Background.jpg"}
+
+```{r fortune2}
+fortune(174)
+```
+
+## {data-background="IHR_Background.jpg"}
+
+```{r fortune3}
+fortune(236)
+```
+
+## {data-background="IHR_Background.jpg"}
+
+```{r fortune4}
+fortune(106)
+
+fortune(181)
+```
+
+# Quick History {data-background="IHR_Background.jpg"}
+
+## S3 {data-background="IHR_Background.jpg"}
+
+Version 3 of the original S language included generic functions.
+
+* Data object can have a "class".
+
+* Generic functions call another function/method based on the class.
+
+  - Quick and simple
+  
+  - No checking to make sure objects have the correct fields
+  
+## S4 {data-background="IHR_Background.jpg"}
+
+Version 4 of S implemented a new object oriented paradigm.
+
+* Objects and methods must now be registered
+
+* Safer because objects guaranteed to have correct fields
+
+* More work up front
+
+* Less flexible
+
+## Reference Classes {data-background="IHR_Background.jpg"}
+
+R introduced Reference classes that are more like OOP languages like smalltalk, Java, C++, etc.
+
+* Methods belong to an object rather than being generic
+
+* Based on S4
+
+* Still Somewhat complicated
+
+Some people started calling these R5 objects, but the authors did not like that.
+
+## R6 {data-background="IHR_Background.jpg"}
+
+A new package that implements Reference Class objects based on S3 objects in a simple but powerful way.
+
+# R6 objects {data-background="IHR_Background.jpg"}
+
+## Creating an object {data-background="IHR_Background.jpg"}
+
+* Assign the result of `R6Class` to a name.
+
+* Pass lists of fields (variables) and methods (functions).
+
+* Use `new` method and save result.
+
+* Use `self$<name>` and `private$<name>` to reference fields. 
+
+## public {data-background="IHR_Background.jpg"}
+
+* List of fields and methods that will be visible and modifiable when using the object
+
+## private {data-background="IHR_Background.jpg"}
+
+* List of fields and methods that can be accessed from private and public methods, but not visible or modifiable from outside.
+
+## active  {data-background="IHR_Background.jpg"}
+
+* List of active bindings, functions that can be treated like variables.
+
+## Special methods {data-background="IHR_Background.jpg"}
+
+* initialize: run when a new object is created
+
+* finalize: run when an object is removed
+
+* clone: used to make a copy of the object
+
+* print: display object summary or contents
+
+# Progress bar example {data-background="IHR_Background.jpg"}
+
+## Functional form {data-background="IHR_Background.jpg"}
+
+```{r fpb, eval=FALSE}
+student_sim <- function(n){
+  x <- rnorm(n)
+  mean(x)/(sd(x)/sqrt(n))
+}
+
+pb <- winProgressBar(max=10000)
+setWinProgressBar(pb, value=0)
+out <- replicate(10000, {
+  i <- getWinProgressBar(pb) + 1
+  setWinProgressBar(pb, value=i)
+  student_sim(25)
+})
+close(pb)
+```
+
+## R6 progress bar wrapper {data-background="IHR_Background.jpg"}
+
+```{r r6pb, eval=FALSE}
+ProgBar <- R6Class("ProgBar",
+                   public = list(
+                     initialize = function(max,...) {
+                       private$pb <- winProgressBar(max=max)
+                     },
+                     inc = function(amount=1) {
+                       private$i <- private$i + amount
+                       setWinProgressBar(private$pb, value=private$i)
+                       invisible(self)
+                     },
+                     reset = function(value=0) {
+                       private$i <- value
+                       setWinProgressBar(private$pb, value=private$i)
+                       invisible(self)
+                     },
+                     val=function() {
+                       private$i
+                     }
+                   ),
+                   private = list(
+                     pb = NULL,
+                     i = 0,
+                     finalize = function(...) {
+                       close(private$pb)
+                     }
+                   )
+                )
+```
+
+## R6 Progress bar example {data-background="IHR_Background.jpg"}
+
+```{r r6pb2, eval=FALSE}
+pb <- ProgBar$new(10000)
+
+pb$reset()
+out <- replicate(10000, {
+  pb$inc()
+  student_sim(25)
+})
+
+rm(pb)
+gc()
+```
+
+## Multiple bars for nested simulation {data-background="IHR_Background.jpg"}
+
+```{r r6pb3, eval=FALSE}
+n.vec <- c(5, 10, 15, 20, 25, 30, 40, 50, 75, 100)
+
+pb.o <- ProgBar$new(length(n.vec))
+pb.o$reset()
+
+pb.i <- ProgBar$new(10000)
+
+out <- lapply(n.vec, function(n) {
+  pb.o$inc()
+  pb.i$reset(0)
+  replicate(10000, {
+    pb.i$inc()
+    student_sim(n)
+  })
+})
+
+rm(pb.o, pb.i)
+gc()
+```
+
+## Include function in object {data-background="IHR_Background.jpg"}
+
+```{r r6pb4, eval=FALSE}
+ProgBar$set('public', "StuSim", function(n){
+  self$inc()
+  student_sim(n)
+})
+
+pb <- ProgBar$new(10000)
+
+pb$reset()
+out <- replicate(10000, pb$StuSim(25))
+
+rm(pb)
+```
+
+## Chaining {data-background="IHR_Background.jpg"}
+
+```{r r6pbchain, eval=FALSE}
+pb <- ProgBar$new(100)
+pb$val()
+# 0
+
+pb$inc()$inc()$inc()$val()
+# 3
+
+pb$reset(50)$val()
+# 50
+
+pb$reset()$val()
+# 0
+
+rm(pb)
+```
+
+## Package purrrogress {data-background="IHR_Background.jpg"}
+
+The purrrogress package does a lot of this for you (and more). 
+
+# Memoizing {data-background="IHR_Background.jpg"}
+
+## Memoizing {data-background="IHR_Background.jpg"}
+
+```{r memo}
+FibGen <- R6Class("FibGen",
+                  public=list(
+                    curmax=2,
+                    fibvals = c(1,1),
+                    fib = function(n) {
+                      if(n <= self$curmax) {
+                        return(self$fibvals[n])
+                      } else {
+                        cat("generating values", self$curmax+1, 'to', n, "\n")
+                        for(i in (self$curmax+1):n) {
+                          self$fibvals[i] <- self$fibvals[i-1] + self$fibvals[i-2]
+                        }
+                        self$curmax <- n
+                        return(self$fibvals[n])
+                      }
+                    }
+                  ))
+```
+
+
+## Memoizing  {data-background="IHR_Background.jpg"}
+
+```{r memo2}
+myfib <- FibGen$new()
+myfib$fib(5)
+myfib$fib(3)
+myfib$fib(10)
+myfib$fib(7)
+myfib$fibvals
+```
+
+# Keeping function values {data-background="IHR_Background.jpg"}
+
+## Optim Example  {data-background="IHR_Background.jpg"}
+
+```{r optim1}
+RBF <- R6Class('RBF',
+               public = list(
+                 x1 = numeric(0),
+                 x2 = numeric(0),
+                 fr = function(x) {
+                   x1 <- x[1]
+                   x2 <- x[2]
+                   self$x1 <- c(self$x1, x1)
+                   self$x2 <- c(self$x2, x2)
+                   100 * (x2 - x1*x1)^2 + (1-x1)^2
+                 }
+               ))
+rbf <- RBF$new()
+
+(res <- optim(c(-1.2, 0), rbf$fr))
+```
+
+## Path  {data-background="IHR_Background.jpg"}
+
+```{r optpath, fig.show='hide'}
+tmp1 <- seq(-1.25, 1.1, length.out=100)
+tmp2 <- seq(-0.1, 1.15, length.out=100)
+z <- outer(tmp1, tmp2, function(x1,x2) 100*(x2-x1*x1)^2 + (1-x1)^2)
+image(tmp1, tmp2, z)
+points(c(-1.2,1),c(0,1), col=c('green','red'), pch=16, cex=2)
+lines(rbf$x1, rbf$x2)
+```
+
+## Path  {data-background="IHR_Background.jpg"}
+
+```{r optpath, echo=FALSE}
+```
+
+# Active Bindings {data-background="IHR_Background.jpg"}
+
+## Mimic syntax like `x++` and `x += y` from Perl/C++/etc. {data-background="IHR_Background.jpg"}
+
+```{r inc1}
+Inc <- R6Class('Inc',
+               public=list(
+                 value=0
+               ),
+               active = list(
+                 pp = function(value) {
+                   if(missing(value)) { #x++ (actually ++x)
+                     self$value <- self$value + 1
+                     return(self$value)
+                   } else {  # x += y
+                     self$value <- self$value + value
+                   }
+                 }
+               )
+               )
+```
+
+## Example {data-background="IHR_Background.jpg"}
+
+```{r inc2}
+x <- Inc$new()
+x$value <- 5
+x$pp
+x$pp <- 10
+x$value
+```
+
+## Example {data-background="IHR_Background.jpg"}
+
+```{r inc3, eval=FALSE}
+i <- Inc$new()
+
+x <- 1e7
+while( abs(x-1) > 0.001 ) {
+  x <- sqrt(x)
+  if( i$pp > 10 ) {
+    cat("Maximum Iterations Reached\n")
+    break
+  }
+}
+
+for(k in longvector) {
+  setWinProgressBar(pb, value=i$pp)
+  LongRunningFunction(k)
+}
+```
+
+
+
+
+
+# Adaptive Integration example (recursion through looping) {data-background="IHR_Background.jpg"}
+
+## Trapazoid object {data-background="IHR_Background.jpg"}
+
+```{r trapobject}
+TrapObj <- R6Class(
+  "TrapObj",
+  public = list(
+    x.left = numeric(1),
+    y.left = numeric(1),
+    x.right = numeric(1),
+    y.right = numeric(1),
+    split = function(fun){
+      left <- self$clone()
+      right <- self$clone()
+      new.x <- (self$x.left + self$x.right)/2
+      new.y <- if(missing(fun)) {
+        (self$y.left + self$y.right)/2
+      } else {
+        fun(new.x)
+      }
+      left$x.right <- right$x.left <- new.x
+      left$y.right <- right$y.left <- new.y
+      list(left=left, right=right)
+    },
+    plot = function(col=NA){
+      polygon(c(self$x.left, self$x.left, self$x.right, self$x.right),
+              c(0,self$y.left, self$y.right, 0), border='blue', col=col)
+    }
+  ),
+  active = list(
+    area = function() (self$x.right - self$x.left) * 
+      (self$y.right + self$y.left)/2
+  )
+)
+```
+
+## Stack {data-background="IHR_Background.jpg"}
+
+```{r stackobject}
+Stack <- R6Class(
+  "Stack",
+  public = list(
+    length = 0L,
+    stack = vector(mode='list', length=10),
+    push = function(obj) {
+      if( length(self$stack) <= self$length ) {
+        self$stack[2*self$length] <- list(NULL)
+      }
+      self$length <- self$length + 1
+      self$stack[[self$length]] <- obj
+      invisible(self)
+    },
+    pop = function() {
+      if(self$length < 1) stop('Stack is empty')
+      tmp <- self$stack[[self$length]]
+      self$length <- self$length - 1
+      return(tmp)
+    }
+  )
+)
+```
+
+
+## Adaptive Integration {data-background="IHR_Background.jpg"}
+
+```{r adaptive, fig.show='hide'}
+cand <- Stack$new()
+res <- Stack$new()
+
+#myfun <- function(x) dnorm(x, 0, 1)
+myfun <- function(x) sin(x^2) + 1.25
+
+start <- TrapObj$new()
+start$x.left <- 0
+start$y.left <- myfun(0)
+start$x.right <- 2.5
+start$y.right <- myfun(2.5)
+
+cand$push(start)
+area <- 0
+tol <- 0.0005
+
+while(cand$length){
+  curve(myfun(x), from=0, to=2.5, col='lightgrey', lwd=5, ylim=c(0,2.5))
+  for(i in seq_len(cand$length)) cand$stack[[i]]$plot("#ff000033")
+  for(i in seq_len(res$length)) res$stack[[i]]$plot("#ff000033")
+  cur <- cand$pop()
+
+  tmp <- cur$split(myfun)
+  for(i in 1:2) tmp[[i]]$plot("#0000ff33")
+  
+  if(abs(cur$area - tmp$left$area - tmp$right$area) <= tol) {
+    res$push(tmp$left)$push(tmp$right)
+    area <- area + tmp$left$area + tmp$right$area
+  } else {
+    cand$push(tmp$right)$push(tmp$left)
+  }
+}
+```
+
+## Adaptive Integration {data-background="IHR_Background.jpg"}
+
+```{r adaptive, echo=FALSE, fig.show='animate', animation.hook=knitr::hook_gifski, interval=0.4}
+```
+
+## Results {data-background="IHR_Background.jpg"}
+
+```{r intres, results='hide', fig.show='hide'}
+curve(myfun(x), from=0, to=2.5, col='green', lwd=5, ylim=c(0,2.5))
+for(i in seq_len(res$length)) {
+  res$stack[[i]]$plot()
+}
+text(0.5, 2.3, paste('Est:',round(area,4)), adj=1)
+text(0.5, 2.1, paste('Int:',round(integrate(myfun, lower=0, upper=2.5)$value,4)), adj=1)
+```
+
+## Results {data-background="IHR_Background.jpg"}
+
+```{r intres, echo=FALSE}
+```
+
+## R6DS {data-background="IHR_Background.jpg"}
+
+The R6DS (Data Structures) package implements stacks, queues, and other data structures using R6 objects, probably better than I have here.
+
+# Not covered {data-background="IHR_Background.jpg"}
+
+## Not covered {data-background="IHR_Background.jpg"}
+
+* Inheritance
+
+* Debugging
+
+* Deep Cloning (reference objects)
+
+* Non-portable R6 objects
+
+* Lots of theory and other things
+
+
+# Questions {data-background="IHR_Background.jpg"}
+
